@@ -1,0 +1,8 @@
+node_modules/
+preview.log
+preview-error.log
+
+# Archivos internos
+*.zip
+docs/
+tools/
