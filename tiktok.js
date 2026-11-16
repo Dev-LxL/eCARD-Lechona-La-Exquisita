@@ -1,81 +1,91 @@
-'use strict';
-// Official Embed Player API: https://developers.tiktok.com/docs/en/embed-player
-// No playback state is claimed unless the provider emits its official event.
+﻿'use strict';
+// Official API: https://developers.tiktok.com/docs/en/embed-player
+// Manual only: visibility autoplay is unverified for these publications.
 (()=>{
-  const origin='https://www.tiktok.com';
-  const motion=matchMedia('(prefers-reduced-motion: reduce)');
-  const players=[...document.querySelectorAll('iframe[data-tiktok-player]')].map(frame=>({
-    frame,ratio:0,observed:false,ready:false,attempted:false,blocked:false
-  }));
+  const origin='https://www.tiktok.com', motion=matchMedia('(prefers-reduced-motion: reduce)');
   const diagnostics=[];
   window.LA_EXQUISITA_TIKTOK_DIAGNOSTICS=diagnostics;
-  function record(player,event,detail={}){
-    diagnostics.push({id:new URL(player.frame.src).pathname.split('/').pop(),event,...detail});
+  const players=[...document.querySelectorAll('iframe[data-tiktok-player]')].map(frame=>({
+    frame,host:frame.parentElement,id:new URL(frame.dataset.src).pathname.split('/').pop(),
+    running:false,playing:false,confirmed:false,lastTime:null,timer:null,slow:null
+  }));
+  function record(p,event,detail={}){
+    diagnostics.push({id:p.id,event,...detail});
     if(diagnostics.length>100)diagnostics.shift();
   }
-  // Keep the entire official 325 × 578 player inside the existing photo-height slot.
-  // Scaling is uniform; the separate original link never covers native controls.
-  players.filter(p=>p.frame.hasAttribute('data-compact-player')).forEach(p=>{
-    const host=p.frame.parentElement;
-    const fit=()=>{const scale=Math.min(host.clientWidth/325,host.clientHeight/578,1);if(scale>0)host.style.setProperty('--player-scale',String(scale));};
-    new ResizeObserver(fit).observe(host);fit();
-  });
-  let active=null;
-  function command(player,type){
-    try{player.frame.contentWindow?.postMessage({'x-tiktok-player':true,type},origin);}
-    catch{record(player,'message-send-failed',{command:type});player.blocked=true;}
+  function command(p,type){p.frame.contentWindow?.postMessage({'x-tiktok-player':true,type},origin);}
+  function restore(p,event='photo',text=''){
+    clearTimeout(p.timer);clearTimeout(p.slow);
+    if(p.running)command(p,'pause');
+    // Unload too: internal cross-origin errors need not emit official messages.
+    p.running=false;p.playing=false;p.confirmed=false;p.lastTime=null;
+    p.frame.hidden=true;p.frame.removeAttribute('src');
+    p.host.classList.remove('player-confirmed');
+    const returnFocus=p.host.contains(document.activeElement);
+    p.start.hidden=false;p.cancel.hidden=true;p.status.textContent=text;
+    if(returnFocus)p.start.focus();
+    record(p,event);
   }
-  function pauseOthers(except=null){players.forEach(p=>{if(p!==except)command(p,'pause');});}
-  function sync(){
-    if(document.hidden){pauseOthers();active=null;return;}
-    if(motion.matches)return;
-    const next=active&&active.ratio>=.6?active:
-      players.filter(p=>p.ratio>=.6&&!p.blocked).sort((a,b)=>b.ratio-a.ratio)[0];
-    if(active&&active!==next)command(active,'pause');
-    active=next||null;
-    if(!next||!next.ready||next.attempted)return;
-    pauseOthers(next);next.attempted=true;command(next,'mute');command(next,'play');
+  function deadline(p){
+    clearTimeout(p.timer);
+    p.timer=setTimeout(()=>restore(p,'playback-unconfirmed','Puedes volver a intentarlo o ver el video en TikTok.'),30000);
   }
-  if(typeof IntersectionObserver!=='undefined'){
-    const observer=new IntersectionObserver(entries=>{
-      entries.forEach(entry=>{
-        const p=players.find(player=>player.frame.parentElement===entry.target);if(!p)return;
-        p.observed=true;p.ratio=entry.isIntersecting?entry.intersectionRatio:0;
-        if(p.ratio===0){command(p,'pause');p.attempted=false;if(active===p)active=null;}
-      });sync();
-    },{threshold:[0,.25,.6,1]});
-    players.forEach(p=>observer.observe(p.frame.parentElement));
-  }
-  players.forEach(p=>p.frame.addEventListener('error',()=>{
-    p.blocked=true;record(p,'iframe-error');command(p,'pause');if(active===p)active=null;
-  }));
-  players.forEach(p=>p.frame.addEventListener('load',()=>{
-    record(p,'iframe-document-loaded');
-    // An iframe load is not proof that TikTok media loaded or played.
-    setTimeout(()=>{if(!p.ready)record(p,'ready-not-received',{note:'Check provider restrictions, consent and browser console; manual controls and original link remain available.'});},12000);
-  }));
-  window.addEventListener('message',event=>{
-    if(event.origin!==origin||!event.data||event.data['x-tiktok-player']!==true)return;
-    const p=players.find(player=>player.frame.contentWindow===event.source);if(!p)return;
-    if(event.data.type==='onPlayerReady'){p.ready=true;record(p,'player-ready');sync();}
-    else if(event.data.type==='onStateChange'&&event.data.value===1){
-      // Native manual playback also pauses any other player.
-      if(document.hidden||(p.observed&&p.ratio===0)){command(p,'pause');return;}
-      pauseOthers(p);active=p;p.attempted=true;record(p,'playing');
-    }else if(event.data.type==='onStateChange'&&event.data.value===2){
-      record(p,'paused');
-    }else if(['onError','onPlayerError'].includes(event.data.type)){
-      p.blocked=true;command(p,'pause');
-      const code=typeof event.data.value==='number'?event.data.value:event.data.value?.errorCode??event.data.errorCode;
-      record(p,'provider-error',{code:code??null,errorType:event.data.value?.errorType||event.data.errorType||null});
-      // Do not remove the provider's message or native manual controls on errors.
-      // Autoplay remains blocked for this player; the original external link stays visible.
-      if(active===p)active=null;
+  players.forEach(p=>{
+    p.start=p.host.querySelector('[data-tiktok-start]');
+    p.cancel=p.host.querySelector('[data-tiktok-cancel]');
+    p.status=p.host.querySelector('[data-tiktok-status]');
+    p.start.addEventListener('click',()=>{
+      players.forEach(other=>{if(other.running)restore(other);});
+      p.running=true;p.start.hidden=true;p.cancel.hidden=false;
+      p.status.textContent='Cargando video…';p.frame.hidden=false;
+      p.frame.src=p.frame.dataset.src;record(p,'manual-attempt');deadline(p);
+      p.slow=setTimeout(()=>{if(!p.confirmed)p.status.textContent='La carga está tardando. Puedes esperar o ver el video en TikTok.';},12000);
+    });
+    p.cancel.addEventListener('click',()=>{restore(p);p.start.focus();});
+    p.frame.addEventListener('load',()=>{if(p.running)record(p,'iframe-document-loaded');});
+    p.frame.addEventListener('error',()=>{if(p.running)restore(p,'iframe-error','Puedes ver el video en TikTok.');});
+    if(p.frame.hasAttribute('data-compact-player')){
+      const fit=()=>{const scale=Math.min(p.host.clientWidth/325,p.host.clientHeight/578,1);if(scale>0)p.host.style.setProperty('--player-scale',String(scale));};
+      new ResizeObserver(fit).observe(p.host);fit();
     }
   });
-  document.addEventListener('visibilitychange',()=>{if(document.hidden){pauseOthers();active=null;}else sync();});
-  window.addEventListener('pagehide',()=>pauseOthers());
-  const motionChanged=()=>{pauseOthers();active=null;players.forEach(p=>{p.attempted=false;});if(!motion.matches)sync();};
-  if(motion.addEventListener)motion.addEventListener('change',motionChanged);
-  else motion.addListener?.(motionChanged);
+  window.addEventListener('message',event=>{
+    if(event.origin!==origin||event.data?.['x-tiktok-player']!==true)return;
+    const p=players.find(p=>p.frame.contentWindow===event.source);
+    if(!p?.running)return;
+    const {type,value}=event.data;
+    if(type==='onPlayerReady'){record(p,'player-ready');command(p,'mute');command(p,'play');}
+    else if(type==='onStateChange'){
+      p.playing=value===1;record(p,'state',{value});
+      if(value===1&&document.hidden){restore(p,'hidden');return;}
+      if(value===1||value===3)deadline(p);
+      else if(p.confirmed)clearTimeout(p.timer);
+    }else if(type==='onCurrentTime'){
+      const time=value?.currentTime;
+      if(p.playing&&Number.isFinite(time)&&p.lastTime!==null&&time>p.lastTime){
+        if(!p.confirmed){
+          p.confirmed=true;p.host.classList.add('player-confirmed');
+          p.status.textContent='';clearTimeout(p.slow);record(p,'playback-confirmed');
+        }
+        deadline(p);
+      }
+      if(Number.isFinite(time))p.lastTime=time;
+    }else if(type==='onError'||type==='onPlayerError'){
+      record(p,'provider-error',{code:typeof value==='number'?value:value?.errorCode??null,errorType:value?.errorType??null});
+      restore(p,'error-fallback','Puedes ver el video en TikTok.');
+    }
+  });
+  if(typeof IntersectionObserver!=='undefined'){
+    const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{
+      const p=players.find(p=>p.host===entry.target);
+      if(p?.running&&!entry.isIntersecting)restore(p,'outside-viewport');
+    }),{threshold:0});
+    players.forEach(p=>observer.observe(p.host));
+  }
+  const stop=()=>players.forEach(p=>{if(p.running)restore(p,'paused');});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});
+  window.addEventListener('pagehide',stop);
+  // No automatic motion; preference changes also stop manual playback.
+  if(motion.addEventListener)motion.addEventListener('change',stop);
+  else motion.addListener?.(stop);
 })();

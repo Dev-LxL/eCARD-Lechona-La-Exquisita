@@ -146,3 +146,16 @@ a:focus-visible,button:focus-visible,[tabindex]:focus-visible,textarea:focus-vis
   .site-header .topbar nav>a:hover{background:var(--paper)}
 }
 @media(max-width:700px){#pagos .bank-layout{grid-template-columns:1fr;gap:20px}#pagos .bank-brand{gap:16px}#pagos .payment-icon{width:48px;height:48px}#pagos .bank-details{border-left:0;border-top:1px solid var(--line);padding:18px 0 0}#pagos .bank-footer{flex-direction:column;align-items:flex-start;gap:18px}#pagos .bank-footer .btn{width:100%}.hero>.ribbon{grid-template-columns:repeat(2,minmax(0,1fr))}.ribbon-item:nth-child(n+3){display:none}}
+/* Shared TikTok photo-first fallback; existing host/carousel dimensions stay intact. */
+.tiktok-frame .tiktok-poster{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;max-width:none}
+.tiktok-frame iframe{visibility:hidden;pointer-events:none}
+.tiktok-frame.player-confirmed iframe{visibility:visible;pointer-events:auto}
+.tiktok-frame.player-confirmed .tiktok-poster{visibility:hidden}
+.tiktok-actions{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;padding:12px;background:#0003;z-index:1}
+.tiktok-actions [hidden]{display:none}
+.tiktok-actions .btn{font-size:.8rem;min-height:44px;margin:0}
+.tiktok-actions [role=status]:not(:empty){background:#340b10;color:#fff;padding:8px;border-radius:8px;font-size:.8rem}
+.player-confirmed .tiktok-actions{inset:8px 8px auto auto;padding:0;background:none}
+.player-confirmed .tiktok-actions .btn{font-size:.7rem;padding:6px 10px}
+.tiktok-fallback .bi-tiktok,.compact-video-link .bi-tiktok{width:16px;height:16px;flex:none;margin-right:6px}
+.essence-media .tiktok-fallback{display:flex;justify-content:center;align-items:center}
