@@ -1057,3 +1057,19 @@ a.btn[href="https://maps.app.goo.gl/BtuRFtNx6KXWH1Wp9"]:focus-visible,
     transition:none;
   }
 }
+
+
+/* LXL-QA-RESPONSIVE-ACCESS-V1 */
+.sandra-carousel-controls [data-sandra-toggle] {
+  min-height: 42px;
+  min-width: 74px;
+  font-size: .82rem;
+}
+
+.lxl-qa-touch-target {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  max-width: 100%;
+  padding-block: 4px;
+}

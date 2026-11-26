@@ -125,8 +125,48 @@
   prev.addEventListener('click', () => show(index - 1));
   next.addEventListener('click', () => show(index + 1));
 
+
+  // LXL-QA-TOUCH-V1
+  let touchStart = null;
+
+  root.addEventListener('touchstart', event => {
+    touchStart = null;
+    if (event.touches.length !== 1) return;
+    if (event.target.closest(
+      'a, button, video, input, select, textarea, [contenteditable]'
+    )) return;
+
+    const point = event.touches[0];
+    touchStart = {x: point.clientX, y: point.clientY};
+  }, {passive: true});
+
+  root.addEventListener('touchend', event => {
+    if (!touchStart || event.changedTouches.length !== 1) {
+      touchStart = null;
+      return;
+    }
+
+    const point = event.changedTouches[0];
+    const dx = point.clientX - touchStart.x;
+    const dy = point.clientY - touchStart.y;
+    touchStart = null;
+
+    if (Math.abs(dx) < 45) return;
+    if (Math.abs(dx) <= Math.abs(dy) * 1.25) return;
+
+    show(index + (dx < 0 ? 1 : -1));
+  }, {passive: true});
+
+  root.addEventListener('touchcancel', () => {
+    touchStart = null;
+  }, {passive: true});
+
   function updateToggle() {
     toggle.textContent = paused ? 'Reanudar' : 'Pausar';
+    toggle.setAttribute(
+      'aria-label',
+      paused ? 'Reanudar carrusel' : 'Pausar carrusel'
+    );
   }
 
   toggle.addEventListener('click', () => {
